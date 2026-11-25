@@ -172,14 +172,21 @@ export const DataProvider = ({ children }) => {
   const deleteGoalOptimistic = useCallback(async (goalId) => {
     const previousGoals = [...goals];
     setGoals(prev => prev.filter(g => g.id !== goalId));
-    // Clean cache
+    try {
+      await deleteGoal(goalId);
+    } catch (err) {
+      setGoals(previousGoals);
+      console.error('Failed to delete goal:', err);
+      throw err;
+    }
+
     delete roadmapCacheRef.current[goalId];
     setAllRoadmaps(prev => {
       const next = { ...prev };
       delete next[goalId];
       return next;
     });
-    // If deleted goal was selected, pick a new one
+
     if (selectedGoalId === goalId) {
       const remaining = previousGoals.filter(g => g.id !== goalId);
       const next = remaining.find(g => g.status === 'active') || remaining[0];
@@ -191,13 +198,6 @@ export const DataProvider = ({ children }) => {
         localStorage.removeItem('exiom_selected_goal');
         localStorage.removeItem('edxiom_selected_goal');
       }
-    }
-    try {
-      await deleteGoal(goalId);
-    } catch (err) {
-      setGoals(previousGoals);
-      console.error('Failed to delete goal:', err);
-      throw err;
     }
   }, [goals, selectedGoalId]);
 

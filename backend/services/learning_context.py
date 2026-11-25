@@ -225,7 +225,11 @@ def build_goal_context_string(ctx: LearningContext) -> str:
     Convert a LearningContext into the rich goal_context string that
     gets injected into the system prompt in generate_onboarding_response().
     """
-    lines = []
+    lines = [
+        "Only ACTIVE goals are current study work. Treat PAUSED goals as on hold: "
+        "do not present their incomplete modules as due or scheduled, and do not "
+        "resume them unless the user explicitly asks."
+    ]
 
     # Goal & progress
     if ctx.active_goal_title:
@@ -333,4 +337,3 @@ def build_goal_context_string(ctx: LearningContext) -> str:
         lines.append("\n### USER'S PERSONAL CALENDAR & SCHEDULED EVENTS:\n  • No personal events currently scheduled.")
 
     return "\n".join(lines)
-

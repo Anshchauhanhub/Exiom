@@ -2,7 +2,7 @@ from auth import logger
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update, func, text
+from sqlalchemy import select, update, func, text, or_
 from sqlalchemy.orm import selectinload
 
 from database import get_db
@@ -14,7 +14,12 @@ from schemas import (
     CacheStatsResponse
 )
 from auth import get_current_user
-from services.groq import generate_roadmap, generate_roadmap_from_playlist, classify_parts_for_quiz
+from services.groq import (
+    GroqConfigurationError,
+    generate_roadmap,
+    generate_roadmap_from_playlist,
+    classify_parts_for_quiz,
+)
 from services.synthesis import synthesize_part_content
 from services.youtube import get_playlist_data
 from services.roadmap_cache import check_cache, save_to_cache, invalidate_template
@@ -200,7 +205,10 @@ async def get_all_tasks(
             selectinload(Part.task).selectinload(Task.goal),
             selectinload(Part.quiz_results)
         )
-        .where(Goal.user_id == user.id)
+        .where(
+            Goal.user_id == user.id,
+            or_(Goal.status == "active", Part.status == "passed"),
+        )
     )
     parts = result.scalars().all()
     
@@ -1057,6 +1065,11 @@ async def get_part_content(
     except Exception as e:
         import logging
         logging.getLogger("edxiom.goals").error(f"Generation failed: {e}", exc_info=True)
+        if isinstance(e, GroqConfigurationError):
+            raise HTTPException(
+                status_code=503,
+                detail="AI study content is unavailable because the Groq API key is invalid or not configured.",
+            )
         raise HTTPException(status_code=500, detail="Content generation failed. Please try again later.")
 
 

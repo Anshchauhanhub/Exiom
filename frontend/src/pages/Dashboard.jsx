@@ -2,7 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
-import { toggleGoalStatus, deleteGoal } from '../services/api';
+import { toggleGoalStatus } from '../services/api';
+import { useToast } from '../context/ToastContext';
 import NeuralLoader from '../components/NeuralLoader';
 import SettingsModal from '../components/SettingsModal';
 import ConfirmDialog from '../components/ConfirmDialog';
@@ -236,8 +237,9 @@ const FEATURED_SLIDES = [
 
 const Dashboard = () => {
   const { user } = useAuth();
-  const { goals, allRoadmaps, loading: dataLoading, refreshData, loadAllRoadmaps, setSelectedGoalId } = useData();
+  const { goals, allRoadmaps, loading: dataLoading, refreshData, loadAllRoadmaps, setSelectedGoalId, deleteGoalOptimistic } = useData();
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const [busy, setBusy] = useState(false);
   const [nextSchedule, setNextSchedule] = useState('');
   const [currentSlide, setCurrentSlide] = useState(0);
@@ -320,6 +322,22 @@ const Dashboard = () => {
   const activeGoals = goals.filter(g => g.status === 'active');
 
   const wrap = async (fn) => { setBusy(true); try { await fn(); await refreshData(); } catch(e) { console.error(e); } finally { setBusy(false); } };
+  const handleDeleteGoal = async () => {
+    const goal = goalToDelete;
+    setGoalToDelete(null);
+    if (!goal) return;
+
+    setBusy(true);
+    try {
+      await deleteGoalOptimistic(goal.id);
+      showToast('Learning path deleted successfully.', 'success');
+    } catch (error) {
+      console.error('Failed to delete learning path:', error);
+      showToast(error.message || 'Could not delete learning path.', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   // ── Empty State ──
   if (!dataLoading && !hasGoals) return (
@@ -704,11 +722,7 @@ const Dashboard = () => {
       <ConfirmDialog
         isOpen={Boolean(goalToDelete)}
         onClose={() => setGoalToDelete(null)}
-        onConfirm={() => {
-          const goal = goalToDelete;
-          setGoalToDelete(null);
-          if (goal) void wrap(() => deleteGoal(goal.id));
-        }}
+        onConfirm={() => void handleDeleteGoal()}
         title="Delete learning path?"
         message={goalToDelete
           ? `"${goalToDelete.title}" and its saved progress will be permanently deleted. This can't be undone.`

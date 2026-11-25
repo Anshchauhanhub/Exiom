@@ -30,3 +30,4 @@ __pycache__
 .vercel
 backend/static/
 .agents/
+pitch-deck-site/

@@ -14,6 +14,10 @@ logger = logging.getLogger("edxiom.groq")
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
+
+class GroqConfigurationError(RuntimeError):
+    """Raised when Groq credentials are missing or rejected."""
+
 # ── Model routing: use the cheapest model that can handle each task ───
 # Heavy (roadmaps, docs, MCQs): 70B for quality structured JSON output
 # Light (entity detect, classification): 8B for speed + minimal tokens
@@ -33,6 +37,14 @@ def get_groq_client() -> AsyncGroq:
     global _groq_client
     if _groq_client is None:
         api_key = os.getenv("GROQ_API_KEY")
+        if not api_key or api_key in ("your-groq-api-key-here", "your_groq_key"):
+            raise GroqConfigurationError(
+                "GROQ_API_KEY is missing. Set a valid key in backend/.env or the deployment environment."
+            )
+        if api_key.startswith("="):
+            raise GroqConfigurationError(
+                "GROQ_API_KEY contains a leading '='. Use GROQ_API_KEY=gsk_... without an extra '='."
+            )
         _groq_client = AsyncGroq(api_key=api_key)
     return _groq_client
 
@@ -121,6 +133,10 @@ async def call_groq(system_prompt: str, user_prompt: str, model: str = None,
                 await asyncio.sleep(1.0 * (attempt + 1))
             except APIError as e:
                 logger.error(f"Groq API error ({use_model}): {e}")
+                if getattr(e, "status_code", None) == 401 or "invalid_api_key" in str(e).lower():
+                    raise GroqConfigurationError(
+                        "Groq rejected the configured API key. Add a valid GROQ_API_KEY and restart the backend."
+                    ) from e
                 raise
             except Exception as e:
                 logger.error(f"Unexpected error calling Groq ({use_model}): {e}")
